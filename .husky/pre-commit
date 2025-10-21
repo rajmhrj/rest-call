@@ -1,0 +1,13 @@
+npm run format
+
+npm run lint ||
+(
+        echo '😤🏀👋😤 Get that weak shit out of here! 😤🏀👋😤
+                ESLint Check Failed. Make the required changes listed above, add changes and try to commit again.'
+        false;
+)
+# If everything passes... Now we can commit
+echo '
+       ✅✅✅✅ You win this time... I am committing this now. ✅✅✅✅
+
+       '

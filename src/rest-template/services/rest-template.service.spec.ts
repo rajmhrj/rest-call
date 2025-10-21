@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import type { AxiosRequestConfig } from 'axios';
 import type { HttpService } from '@nestjs/axios';
 import { HttpException, HttpStatus } from '@nestjs/common';
-import type { AxiosRequestConfig } from 'axios';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import { RestTemplateService } from './rest-template.service.js';
 
