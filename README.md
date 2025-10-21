@@ -1,98 +1,149 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# nestjs-restcall
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Reusable REST client utilities for NestJS applications. `nestjs-restcall` provides an extendible `AbstractRestTemplate` class plus a default `RestTemplateService`, making it simple to wrap upstream HTTP APIs with consistent error handling, auth hooks, and reusable helpers.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- 🔁 Shared request pipeline across verbs (`GET`, `POST`, etc.) with typed overloads
+- 🛡️ Centralized error translation via `mapAndThrowError`
+- 🔐 Pluggable auth/token handling using `RequestContext`
+- 🧰 Helper utilities for query strings and validation
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Installation
 
 ```bash
-$ npm install
+npm install nestjs-restcall
 ```
 
-## Compile and run the project
+If you are using Yarn or pnpm, install via `yarn add nestjs-restcall` or `pnpm add nestjs-restcall`.
+
+## Quick Start
+
+Register the provided module, then inject the ready-to-use `RestTemplateService` anywhere you need to make outbound HTTP calls.
+
+```ts
+// src/app.module.ts
+import { Module } from '@nestjs/common';
+import { RestTemplateModule } from 'nestjs-restcall';
+
+@Module({
+  imports: [RestTemplateModule],
+})
+export class AppModule {}
+```
+
+```ts
+// Some service or controller
+import { Injectable } from '@nestjs/common';
+import { RestTemplateService } from 'nestjs-restcall';
+
+@Injectable()
+export class PaymentsService {
+  constructor(private readonly rest: RestTemplateService) {}
+
+  async fetchPayment(id: string) {
+    return this.rest.get<Payment>(`https://payments.internal/api/payments/${id}`);
+  }
+}
+```
+
+### Passing headers, params, and context
+
+```ts
+await this.rest.get<Payment[]>('https://payments.internal/api/payments', {
+  params: { limit: 50 },
+  headers: { 'X-Trace-Id': ctx.traceId },
+  context: { token: userToken, requestId: ctx.traceId },
+});
+```
+
+## Extending the template
+
+Most projects will subclass `AbstractRestTemplate` to customize auth, headers, or error handling.
+
+```ts
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  AbstractRestTemplate,
+  RequestContext,
+  UpstreamErrorBody,
+} from 'nestjs-restcall';
+
+@Injectable()
+export class PaymentsRestTemplate extends AbstractRestTemplate {
+  protected getDefaultHeaders() {
+    return {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    } as const;
+  }
+
+  protected async applyAuth(config, context?: RequestContext) {
+    if (!context?.token) return config;
+    return {
+      ...config,
+      headers: {
+        ...(config.headers ?? {}),
+        Authorization: `Bearer ${context.token}`,
+      },
+    };
+  }
+
+  protected mapAndThrowError(error: unknown): never {
+    const upstream = error as { response?: { status?: number; data?: UpstreamErrorBody } };
+    const status = upstream.response?.status ?? HttpStatus.BAD_GATEWAY;
+    throw new HttpException(
+      {
+        message: upstream.response?.data?.message ?? 'Upstream request failed',
+        code: upstream.response?.data?.code ?? 'UPSTREAM_ERROR',
+        details: upstream.response?.data?.details,
+      },
+      status,
+    );
+  }
+}
+```
+
+Provide your subclass via Nest DI as needed (e.g., register it in a feature module, use it instead of the default `RestTemplateService`, or wrap it with domain-specific methods).
+
+## Helpers and types
+
+The package re-exports utility helpers and types to keep integrations strongly typed:
+
+- `buildUrl(url, params)` – append primitive query params
+- `assertNonEmpty(value, label)` – guard string arguments
+- `RequestContext` and `RestRequestOption` interfaces – consistent context typing
+- `TokenProvider` interface – handshake around caching and refreshing auth tokens
+
+Import them directly from the package root:
+
+```ts
+import { buildUrl, RequestContext, TokenProvider } from 'nestjs-restcall';
+```
+
+## Development
+
+Local scripts assume Node.js 18+:
 
 ```bash
-# development
-$ npm run start
+# Install deps
+npm install
 
-# watch mode
-$ npm run start:dev
+# Check formatting & lint
+npm run lint
 
-# production mode
-$ npm run start:prod
+# Run tests
+npm run test
+
+# Compile to dist/
+npm run build
 ```
 
-## Run tests
+The `test` script disables Watchman to stay CI-friendly. Unit coverage lives in `src/rest-template/services/rest-template.service.spec.ts`; expand the suite as you add features.
 
-```bash
-# unit tests
-$ npm run test
+## CI & Publishing
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+- `.github/workflows/test.yml` runs linting and tests on every pull request and pushes to `main`/`master`.
+- `.github/workflows/publish.yml` executes lint, tests, build, and `npm publish` when a release is published or a version tag is pushed. Configure the `NPM_TOKEN` secret in your repository settings before triggering a publish.
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+MIT © 2025 rest-call contributors
