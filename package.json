@@ -1,21 +1,15 @@
 {
   "name": "nestjs-restcall",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Generic, extendible REST template for NestJS projects.",
   "author": "Raj Maharjan",
   "license": "MIT",
   "private": false,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist/**/*"
   ],
   "scripts": {
     "build": "nest build",
