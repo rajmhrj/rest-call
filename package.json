@@ -1,5 +1,5 @@
 {
-  "name": "rest-call",
+  "name": "nestjs-restcall",
   "version": "0.0.1",
   "description": "Generic, extendible REST template for NestJS projects.",
   "author": "Raj Maharjan",
