@@ -4,49 +4,88 @@ on:
   release:
     types:
       - published
+
   workflow_dispatch:
     inputs:
       tag:
-        description: Optional git tag (overrides current ref)
+        description: Optional git tag (overrides release tag)
         required: false
+
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+
     environment:
       name: npm
       url: https://www.npmjs.com/package/nestjs-restcall
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Use Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Sync version from tag and commit
+        run: |
+          set -e
+
+          # Determine tag (manual override OR release tag)
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          VERSION="${TAG#v}"
+          echo "Using version: $VERSION"
+
+          # Read current version
+          CURRENT=$(jq -r '.version' package.json)
+
+          if [ "$CURRENT" = "$VERSION" ]; then
+            echo "Version already up-to-date ($CURRENT). Skipping commit."
+          else
+            echo "Updating package.json from $CURRENT → $VERSION"
+
+            # Update package.json
+            bunx npm version "$VERSION" --no-git-tag-version
+
+            # Configure git
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            git add package.json
+            git commit -m "chore(release): v$VERSION"
+
+            # Push to the default branch (main or master)
+            git push origin HEAD:main
+          fi
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: bun run lint
 
       - name: Test
-        run: npm run test
+        run: bun run test
 
-      - name: Build package
-        run: npm run build
+      - name: Build
+        run: bun run build
 
-      - name: Publish to npm
+      - name: Publish to npm (Bun)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CI: true
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            git checkout "${{ github.event.inputs.tag }}"
-          fi
-          npm publish --access public
+          bun publish --access public --ignore-scripts --verbose

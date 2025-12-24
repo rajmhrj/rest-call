@@ -18,17 +18,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
+          bun-version: latest
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
-      - name: Lint
-        run: npm run lint
+      - name: Run formatter
+        run: |
+          bun run format
+          git diff --exit-code
+
+      - name: Run linter
+        run: |
+          bun run lint
+          git diff --exit-code
 
       - name: Test
         run: npm run test
+
+      - name: Comment on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const author = context.payload.pull_request?.user?.login;
+            const mention = author ? `@${author}` : 'PR author';
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${mention} the lint/format checks failed. Please run format and lint fixes before merging.`
+            });
