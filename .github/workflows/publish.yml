@@ -48,4 +48,4 @@ jobs:
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             git checkout "${{ github.event.inputs.tag }}"
           fi
-          bun publish --access public
+          bun publish --access public --ignore-scripts
