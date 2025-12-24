@@ -1,6 +1,6 @@
 {
   "name": "nestjs-restcall",
-  "version": "0.0.8",
+  "version": "0.0.10",
   "description": "Generic, extendible REST template for NestJS projects.",
   "author": "Raj Maharjan",
   "license": "MIT",
