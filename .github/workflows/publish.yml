@@ -4,30 +4,61 @@ on:
   release:
     types:
       - published
+
   workflow_dispatch:
     inputs:
       tag:
-        description: Optional git tag (overrides current ref)
+        description: Optional git tag (overrides release tag)
         required: false
+
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+
     environment:
       name: npm
       url: https://www.npmjs.com/package/nestjs-restcall
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Sync version from tag and commit
+        run: |
+          set -e
+
+          # Determine tag (manual override OR release tag)
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          VERSION="${TAG#v}"
+          echo "Using version: $VERSION"
+
+          # Update package.json (no git tag)
+          bunx npm version "$VERSION" --no-git-tag-version
+
+          # Commit change
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add package.json
+          git commit -m "chore(release): v$VERSION"
+          git push origin HEAD
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -38,14 +69,12 @@ jobs:
       - name: Test
         run: bun run test
 
-      - name: Build package
+      - name: Build
         run: bun run build
 
       - name: Publish to npm (Bun)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CI: true
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            git checkout "${{ github.event.inputs.tag }}"
-          fi
-          bun publish --access public --ignore-scripts
+          bun publish --access public --ignore-scripts --verbose
