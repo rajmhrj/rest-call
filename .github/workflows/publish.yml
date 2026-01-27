@@ -30,10 +30,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
+          cache: npm
 
       - name: Sync version from tag and commit
         run: |
@@ -58,7 +59,7 @@ jobs:
             echo "Updating package.json from $CURRENT → $VERSION"
 
             # Update package.json
-            bunx npm version "$VERSION" --no-git-tag-version
+            npx npm version "$VERSION" --no-git-tag-version
 
             # Configure git
             git config user.name "github-actions[bot]"
@@ -72,20 +73,20 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Lint
-        run: bun run lint
+        run: npm run lint
 
       - name: Test
-        run: bun run test
+        run: npm run test
 
       - name: Build
-        run: bun run build
+        run: npm run build
 
-      - name: Publish to npm (Bun)
+      - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           CI: true
         run: |
-          bun publish --access public --ignore-scripts --verbose
+          npm publish --access public --ignore-scripts --verbose

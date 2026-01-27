@@ -18,22 +18,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Run formatter
         run: |
-          bun run format
+          npm run format
           git diff --exit-code
 
       - name: Run linter
         run: |
-          bun run lint
+          npm run lint
           git diff --exit-code
 
       - name: Test
