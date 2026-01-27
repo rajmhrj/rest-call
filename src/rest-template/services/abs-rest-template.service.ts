@@ -3,6 +3,7 @@ import {
   AxiosResponse,
   AxiosRequestConfig,
   RawAxiosRequestHeaders,
+  AxiosError,
 } from 'axios';
 import { HttpService } from '@nestjs/axios';
 
@@ -209,20 +210,27 @@ export abstract class AbstractRestTemplate {
   }
 
   /**
-   * Core request path shared by all verbs.
-   * - Builds a base config with defaults + per-call overrides.
-   * - Invokes {@link applyAuth} to attach credentials/tracing.
-   * - Executes the request via Axios.
-   * - Returns either `data` or the full response based on {@link ResponseMode}.
+   * The function `request` in TypeScript is a protected asynchronous method that sends HTTP requests
+   * with optional authentication and retry logic.
    *
-   * @template T Response body type
-   * @template Q Query params type
-   * @template B Request body type
-   *
-   * @param method HTTP method ("GET" | "POST" | ...)
-   * @param url Absolute or relative URL (relative uses Axios baseURL if set)
-   * @param body Optional request body (POST/PUT/PATCH)
-   * @param options See {@link RestRequestOption}
+   * @param {Method} method - The `method` parameter in the `request` function specifies the HTTP
+   * method to be used for the request, such as 'GET', 'POST', 'PUT', 'DELETE', etc.
+   * @param {string} url - The `url` parameter in the `request` function is a string that represents
+   * the URL to which the HTTP request will be sent. It specifies the endpoint or resource on the
+   * server that the client wants to interact with.
+   * @param {B} [body] - The `body` parameter in the `request` function represents the data that you
+   * want to send in the request. It is optional, meaning you can make requests without a body if not
+   * needed. The type of data that can be passed as the body is determined by the generic type `B`
+   * specified
+   * @param [options] - The `options` parameter in the `request` function is an object that can contain
+   * additional configuration options for the HTTP request. It is defined as a generic type
+   * `RestRequestOption<Q>` with an additional property `responseMode` of type `ResponseMode`.
+   * @param [maxRetryAttempts=0] - The `maxRetryAttempts` parameter in the `request` function specifies
+   * the maximum number of retry attempts that can be made if a 401 status code is received in the
+   * response. If the initial request results in a 401 status code and `maxRetryAttempts` is greater
+   * than 0, the
+   * @returns The `request` function returns a `Promise` that resolves to either type `T` or
+   * `AxiosResponse<T>`.
    */
   protected async request<
     T,
@@ -233,6 +241,7 @@ export abstract class AbstractRestTemplate {
     url: string,
     body?: B,
     options?: RestRequestOption<Q> & { responseMode: ResponseMode },
+    maxRetryAttempts = 0,
   ): Promise<T | AxiosResponse<T>> {
     try {
       const baseCfg = this.buildBaseConfig(options);
@@ -251,6 +260,17 @@ export abstract class AbstractRestTemplate {
         ? resp
         : resp.data;
     } catch (error) {
+      const ax = error as AxiosError;
+      const status = ax.response?.status;
+      if (status === 401 && maxRetryAttempts > 0) {
+        return await this.request(
+          method,
+          url,
+          body,
+          options,
+          maxRetryAttempts - 1,
+        );
+      }
       this.mapAndThrowError(error);
     }
   }
